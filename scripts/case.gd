@@ -109,6 +109,8 @@ const MAPS := {
 			{"id": "sp_ledger", "clue": "clue_ledger", "x": 18, "y": 3},
 		],
 		"doors": [
+			{"x": 11, "y": 14, "to": "street", "tx": 2, "ty": 6},
+			{"x": 11, "y": 15, "to": "street", "tx": 2, "ty": 6},
 			{"x": 11, "y": 16, "to": "street", "tx": 2, "ty": 6},
 		],
 		"spawn": {"x": 11, "y": 13},

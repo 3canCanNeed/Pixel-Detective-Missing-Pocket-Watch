@@ -24,6 +24,24 @@ func _build_steps() -> Array:
 	return [
 		{"do": "wait_ready"},
 		{"do": "assert_map", "id": "street"},
+		# --- 走位踩门传送：从 shop 门口向下一格踩门应回到 street ---
+		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13, "rain": false},
+		{"do": "teleport", "x": 11, "y": 13},
+		{"do": "hold_move", "key": KEY_S, "frames": 30},
+		{"do": "assert_map", "id": "street"},
+		# --- NPC 阻挡：按住 A 向小陈走，不应穿过 ---
+		{"do": "goto_map", "map": "street", "tx": 7, "ty": 7, "rain": true},
+		{"do": "teleport", "x": 7, "y": 7},
+		{"do": "hold_move", "key": KEY_A, "frames": 30},
+		{"do": "assert_min_x", "min": 100},
+		{"do": "key_release", "key": KEY_A},
+		{"do": "goto_map", "map": "street", "tx": 2, "ty": 6, "rain": true},
+		# --- 老周对话取证链路（按钮 → give_clue）---
+		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13, "rain": false},
+		{"do": "talk", "npc": "老周", "pick": 0, "give_clue": "clue_lock"},
+		{"do": "assert_flag", "k": "met_zhou", "v": true},
+		{"do": "talk", "npc": "老周", "pick": 0, "give_clue": "clue_lock"},
+		{"do": "talk", "npc": "老周", "pick": 1, "give_clue": "clue_ledger"},
 		# 商店: 虚掩的柜门 + 台账
 		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13, "rain": false},
 		{"do": "collect", "clue": "clue_lock", "at": Vector2(4, 3)},
@@ -63,14 +81,15 @@ func _process(_delta: float) -> void:
 	match s.get("do"):
 		"wait_ready":
 			if main != null and is_instance_valid(main) and main.player != null:
-				print("READY: 场景已实例化")
+				print("READY: 场景已实例化（关闭开场说明）")
+				main.intro_panel.visible = false
 				step_idx += 1
 		"assert_map":
 			if main.current_map == s["id"]:
 				_pass("当前地图 " + s["id"])
-				step_idx += 1
 			else:
 				_fail("期望地图 %s 实际 %s" % [s["id"], main.current_map])
+			step_idx += 1
 		"goto_map":
 			# 直接调用引擎切图（等价于走门）
 			if main.current_map != s["map"]:
@@ -102,8 +121,7 @@ func _process(_delta: float) -> void:
 		"talk":
 			if s["give_clue"] in main.clues:
 				_pass("对话获得线索 " + str(s["give_clue"]))
-				main.dialogue_panel.visible = false
-				main.dialogue_open = false
+				main._close_dialogue()
 				step_idx += 1
 				return
 			if main.typing:
@@ -114,14 +132,13 @@ func _process(_delta: float) -> void:
 				step_idx += 1
 				return
 			if main.dialogue_open and main.dialogue_choices.get_child_count() > 0:
-				# 点击最后一个可用选项
-				var idx: int = main.dialogue_choices.get_child_count() - 1
+				# 点击指定序号的选项
+				var idx: int = s.get("pick", 0)
 				var btn := main.dialogue_choices.get_child(idx) as Button
 				if btn.disabled:
-					if idx > 0:
-						btn = main.dialogue_choices.get_child(0) as Button
-					else:
-						return
+					_fail("选项被禁用: " + btn.text)
+					step_idx += 1
+					return
 				main.dialogue_panel.visible = false
 				main.dialogue_open = false
 				btn.pressed.emit()
@@ -192,6 +209,37 @@ func _process(_delta: float) -> void:
 			else:
 				_fail("重开异常: map=%s clues=%d intro=%s" % [main.current_map, main.clues.size(), str(main.intro_panel.visible)])
 			main.intro_panel.visible = false
+			step_idx += 1
+		"teleport":
+			main.player.position = Vector2(s["x"] * 16 + 8, s["y"] * 16 + 8)
+			step_idx += 1
+		"hold_move":
+			if s.get("_f", 0) == 0:
+				var ev := InputEventKey.new()
+				ev.keycode = s["key"]
+				ev.physical_keycode = s["key"]
+				ev.pressed = true
+				Input.parse_input_event(ev)
+			s["_f"] = s.get("_f", 0) + 1
+			if s["_f"] >= s["frames"]:
+				var ev2 := InputEventKey.new()
+				ev2.keycode = s["key"]
+				ev2.physical_keycode = s["key"]
+				ev2.pressed = false
+				Input.parse_input_event(ev2)
+				step_idx += 1
+		"key_release":
+			var ev3 := InputEventKey.new()
+			ev3.keycode = s["key"]
+			ev3.physical_keycode = s["key"]
+			ev3.pressed = false
+			Input.parse_input_event(ev3)
+			step_idx += 1
+		"assert_min_x":
+			if main.player.position.x >= s["min"]:
+				_pass("NPC 阻挡生效: x=%.1f >= %d" % [main.player.position.x, s["min"]])
+			else:
+				_fail("穿模! x=%.1f < %d" % [main.player.position.x, s["min"]])
 			step_idx += 1
 		"done":
 			print("RUNTIME_TEST_RESULT: %d 通过 / %d 失败" % [passed, failed])

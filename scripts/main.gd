@@ -152,6 +152,7 @@ func _enter_map(map_id: String, tx: int, ty: int) -> void:
 	player.position = Vector2(tx * T + 8, ty * T + 8)
 	player_sprite = Sprite2D.new()
 	player_sprite.texture = tex["player_down"]
+	player_sprite.flip_h = false
 	player.add_child(player_sprite)
 	add_child(player)
 
