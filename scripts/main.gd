@@ -37,6 +37,7 @@ var dialogue_open := false
 var typing := false
 var _dlg_gen := 0      # 对话代际令牌：新对话使旧协程失效
 var _skip_typing := false
+var _notebook_dirty := true
 var notebook_panel: PanelContainer
 var notebook_list: RichTextLabel
 var accuse_panel: PanelContainer
@@ -293,6 +294,7 @@ func _collect_clue(clue_id: String) -> void:
 	if clue_id in clues:
 		return
 	clues.append(clue_id)
+	_notebook_dirty = true
 	var c: Dictionary = Case.CLUES[clue_id]
 	_dialogue("侦探笔记", ["[color=#ffd54f][b]获得线索：%s[/b][/color]\n\n%s" % [c["name"], c["text"]]], [])
 
@@ -367,14 +369,16 @@ func _dialogue(speaker: String, lines: Array, choices: Array) -> void:
 	if choices.is_empty():
 		_add_choice_button("离开", Callable())
 	else:
+		var ci := 0
 		for ch in choices:
 			var disabled := false
-			var label: String = ch["t"]
+			var label: String = "%d. %s" % [ci + 1, ch["t"]]
 			if ch.get("accuse", false):
 				if clues.size() < Case.ACCUSATION["unlock_clues"]:
 					disabled = true
 					label += "  [线索不足 %d/%d]" % [clues.size(), Case.ACCUSATION["unlock_clues"]]
 			_add_choice_button(label, Callable(self, "_apply_choice").bind(ch), disabled)
+			ci += 1
 
 
 func _add_choice_button(label: String, action: Callable, disabled: bool = false) -> void:
@@ -536,10 +540,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE:
 			accuse_panel.visible = false
 		return
+	# 对话中数字键快选（1~9 对应选项序号）
+	if dialogue_open and event.keycode >= KEY_1 and event.keycode <= KEY_9:
+		var kidx: int = event.keycode - KEY_1
+		if kidx < dialogue_choices.get_child_count():
+			var kbtn := dialogue_choices.get_child(kidx) as Button
+			if not kbtn.disabled:
+				_close_dialogue()
+				kbtn.pressed.emit()
+		return
 	if event.keycode == KEY_E and not dialogue_open and not _overlay_open() and not notebook_panel.visible:
 		interact()
 	elif event.keycode == KEY_N and not dialogue_open:
 		notebook_panel.visible = not notebook_panel.visible
+		_notebook_dirty = true
 	elif event.keycode == KEY_ESCAPE:
 		notebook_panel.visible = false
 		if dialogue_open:
@@ -718,8 +732,9 @@ func _process(_delta: float) -> void:
 		var name2: String = target["id"] if target["type"] == "npc" \
 			else Case.CLUES[target["node"].get_meta("clue")]["name"]
 		prompt_label.text = "[E] %s · %s　　[N] 笔记（%d 条线索）" % [verb, name2, clues.size()]
-	# 线索簿内容
-	if notebook_panel.visible:
+	# 线索簿内容（仅打开且内容变化时重建，避免每帧拼接+重排版）
+	if notebook_panel.visible and _notebook_dirty:
+		_notebook_dirty = false
 		var txt := ""
 		if clues.is_empty():
 			txt = "[i]（还没有收集任何线索）[/i]"

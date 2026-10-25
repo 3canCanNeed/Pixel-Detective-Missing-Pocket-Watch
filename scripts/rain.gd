@@ -21,7 +21,7 @@ func _process(delta: float) -> void:
 	for d in drops:
 		d["y"] += d["spd"] * delta
 		d["x"] += d["spd"] * 0.12 * delta
-		if d["y"] > 720:
+		if d["y"] > 660:
 			d["y"] = -20
 			d["x"] = randf() * 1200
 	queue_redraw()

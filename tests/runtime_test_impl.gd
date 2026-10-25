@@ -38,6 +38,8 @@ func _build_steps() -> Array:
 		{"do": "goto_map", "map": "street", "tx": 2, "ty": 6, "rain": true},
 		# --- 老周对话取证链路（按钮 → give_clue）---
 		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13, "rain": false},
+		{"do": "skip_test", "npc": "老周"},
+		{"do": "digit_pick", "npc": "老周", "digit": 1},
 		{"do": "talk", "npc": "老周", "pick": 0, "give_clue": "clue_lock"},
 		{"do": "assert_flag", "k": "met_zhou", "v": true},
 		{"do": "talk", "npc": "老周", "pick": 0, "give_clue": "clue_lock"},
@@ -201,6 +203,34 @@ func _process(_delta: float) -> void:
 			else:
 				_fail("旗标 %s 期望 %s 实际 %s" % [s["k"], str(s["v"]), str(main.flags.get(s["k"]))])
 			step_idx += 1
+		"skip_test":
+			if main.dialogue_open and not main.typing:
+				_pass("点击跳过打字: 选项立即就绪")
+				main._close_dialogue()
+				step_idx += 1
+				return
+			if main.dialogue_open and main.typing:
+				var mev := InputEventMouseButton.new()
+				mev.button_index = MOUSE_BUTTON_LEFT
+				mev.pressed = true
+				main._on_dialogue_input(mev)
+				return
+			if not main.dialogue_open:
+				main._talk(s["npc"])
+		"digit_pick":
+			if main.flags.get("met_zhou", false):
+				_pass("数字键 1 快选生效")
+				main._close_dialogue()
+				step_idx += 1
+				return
+			if main.dialogue_open and not main.typing:
+				var dev := InputEventKey.new()
+				dev.keycode = KEY_1
+				dev.pressed = true
+				Input.parse_input_event(dev)
+				return
+			if not main.dialogue_open:
+				main._talk(s["npc"])
 		"restart_check":
 			main._restart()
 			var rs_ok: bool = main.current_map == "street" and main.clues.size() == 0 and main.intro_panel.visible
