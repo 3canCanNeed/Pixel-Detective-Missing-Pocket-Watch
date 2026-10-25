@@ -226,6 +226,7 @@ const NPCS := {
 		"dialogues": [
 			{
 				"not_flags": ["wang_confronted"],
+				"not_clues": ["clue_pawn"],
 				"lines": [
 					"哎呀，侦探先生。这一晚真是吓死我了。",
 					"我一直是本楼栋的楼管，打扫楼道十几年了，从没出过这种事。",
@@ -243,6 +244,7 @@ const NPCS := {
 			},
 			{
 				"not_flags": [],
+				"need_clues": ["clue_pawn"],
 				"lines": ["侦探先生，查得怎么样了？抓到那个贼了吗？", "（她的手一直在发抖。）"],
 				"choices": [
 					{"t": "（出示当票）这上面的'王'字，是你吗？", "lines": [

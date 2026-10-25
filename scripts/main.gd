@@ -92,11 +92,21 @@ func _is_solid(x: int, y: int) -> bool:
 	return ch == "#" or ch == "C"
 
 
+func _npc_at(x: int, y: int) -> bool:
+	for id in npc_nodes:
+		var n: Node2D = npc_nodes[id]
+		if int(n.position.x / T) == x and int(n.position.y / T) == y:
+			return true
+	return false
+
+
 func _enter_map(map_id: String, tx: int, ty: int) -> void:
 	for c in get_children():
-		if c.name != "UI":
-			remove_child(c)
-			c.queue_free()
+		# UI 与 Rain 是跨地图的 CanvasLayer，不随地图销毁
+		if c.name == "UI" or c.name == "Rain":
+			continue
+		remove_child(c)
+		c.queue_free()
 	npc_nodes.clear()
 	sparkle_nodes.clear()
 	current_map = map_id
@@ -164,6 +174,8 @@ func _enter_map(map_id: String, tx: int, ty: int) -> void:
 		camera.limit_bottom = 100000000
 	player.add_child(camera)
 	camera.make_current()
+	# 雨只下在室外
+	rain_layer.visible = (map_id == "street")
 
 
 func _physics_process(delta: float) -> void:
@@ -189,7 +201,7 @@ func _physics_process(delta: float) -> void:
 		for f in feet:
 			var px: float = target.x + f.x
 			var py: float = player.position.y + f.y
-			if _is_solid(int(px / T), int(py / T)):
+			if _is_solid(int(px / T), int(py / T)) or _npc_at(int(px / T), int(py / T)):
 				ok_x = false
 		if ok_x:
 			player.position.x = target.x
@@ -198,7 +210,7 @@ func _physics_process(delta: float) -> void:
 		for f in feet:
 			var px2: float = player.position.x + f.x
 			var py2: float = target.y + f.y
-			if _is_solid(int(px2 / T), int(py2 / T)):
+			if _is_solid(int(px2 / T), int(py2 / T)) or _npc_at(int(px2 / T), int(py2 / T)):
 				ok_y = false
 		if ok_y:
 			player.position.y = target.y
@@ -290,6 +302,14 @@ func _talk(npc_id: String) -> void:
 		var blocked := false
 		for f in entry.get("not_flags", []):
 			if flags.get(f, false):
+				blocked = true
+				break
+		for cid in entry.get("not_clues", []):
+			if cid in clues:
+				blocked = true
+				break
+		for cid in entry.get("need_clues", []):
+			if not (cid in clues):
 				blocked = true
 				break
 		if blocked:
@@ -490,6 +510,10 @@ func _add_ending_button(label: String, action: Callable) -> void:
 
 
 func _restart() -> void:
+	_dlg_gen += 1
+	typing = false
+	dialogue_open = false
+	dialogue_panel.visible = false
 	flags = {}
 	clues = []
 	accused = false

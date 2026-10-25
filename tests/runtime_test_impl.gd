@@ -25,23 +25,26 @@ func _build_steps() -> Array:
 		{"do": "wait_ready"},
 		{"do": "assert_map", "id": "street"},
 		# 商店: 虚掩的柜门 + 台账
-		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13},
+		{"do": "goto_map", "map": "shop", "tx": 11, "ty": 13, "rain": false},
 		{"do": "collect", "clue": "clue_lock", "at": Vector2(4, 3)},
 		{"do": "collect", "clue": "clue_ledger", "at": Vector2(18, 3)},
 		# 街道: 湿脚印 + 目击
-		{"do": "goto_map", "map": "street", "tx": 2, "ty": 6},
+		{"do": "goto_map", "map": "street", "tx": 2, "ty": 6, "rain": true},
 		{"do": "collect", "clue": "clue_prints", "at": Vector2(6, 9)},
 		{"do": "talk", "npc": "李先生", "give_clue": "clue_witness"},
 		# 楼道: 扫帚 + 当票
-		{"do": "goto_map", "map": "stairwell", "tx": 8, "ty": 14},
+		{"do": "goto_map", "map": "stairwell", "tx": 8, "ty": 14, "rain": false},
 		{"do": "collect", "clue": "clue_broom", "at": Vector2(14, 2)},
 		{"do": "collect", "clue": "clue_pawn", "at": Vector2(14, 15)},
+		{"do": "talk_pick", "npc": "王阿姨", "pick": 0, "flag": "wang_confronted"},
+		{"do": "assert_flag", "k": "wang_confronted", "v": true},
 		{"do": "assert_clues", "n": 6},
 		# 错误指认（错误嫌疑人）→ 可继续游戏
 		{"do": "accuse", "suspect": "小陈", "evidence": ["clue_pawn", "clue_broom"], "expect": "wrong_suspect"},
 		{"do": "accuse", "suspect": "王阿姨", "evidence": ["clue_broom", "clue_prints"], "expect": "weak_evidence"},
 		# 正确指认
 		{"do": "accuse", "suspect": "王阿姨", "evidence": ["clue_pawn", "clue_broom"], "expect": "good"},
+		{"do": "restart_check"},
 		{"do": "done"},
 	]
 
@@ -73,6 +76,11 @@ func _process(_delta: float) -> void:
 			if main.current_map != s["map"]:
 				main._enter_map(s["map"], s["tx"], s["ty"])
 			if main.current_map == s["map"]:
+				if s.has("rain") and main.rain_layer.visible != s["rain"]:
+					_fail("%s 雨天显示错误: 期望%s" % [s["map"], str(s["rain"])])
+				else:
+					if s.has("rain"):
+						_pass("切图 %s 雨天=%s" % [s["map"], str(main.rain_layer.visible)])
 				step_idx += 1
 		"collect":
 			if main.dialogue_open:
@@ -154,6 +162,36 @@ func _process(_delta: float) -> void:
 				btn_found.pressed.emit()
 				if main.ending_panel.visible or main.clues.size() != 6:
 					_fail("继续调查后状态异常: 面板=%s 线索数=%d" % [str(main.ending_panel.visible), main.clues.size()])
+			step_idx += 1
+		"talk_pick":
+			if main.flags.get(s["flag"], false) and not main.dialogue_open:
+				_pass("对质旗标 %s 已设置" % s["flag"])
+				step_idx += 1
+				return
+			if main.typing:
+				return
+			if main.dialogue_open and main.dialogue_choices.get_child_count() > 0:
+				var pidx: int = s["pick"]
+				var pbtn := main.dialogue_choices.get_child(pidx) as Button
+				main.dialogue_panel.visible = false
+				main.dialogue_open = false
+				pbtn.pressed.emit()
+			elif not main.dialogue_open:
+				main._talk(s["npc"])
+		"assert_flag":
+			if main.flags.get(s["k"], false) == s["v"]:
+				_pass("旗标 %s = %s" % [s["k"], str(s["v"])])
+			else:
+				_fail("旗标 %s 期望 %s 实际 %s" % [s["k"], str(s["v"]), str(main.flags.get(s["k"]))])
+			step_idx += 1
+		"restart_check":
+			main._restart()
+			var rs_ok: bool = main.current_map == "street" and main.clues.size() == 0 and main.intro_panel.visible
+			if rs_ok:
+				_pass("重开流程: 地图/线索/开场说明 全部复位")
+			else:
+				_fail("重开异常: map=%s clues=%d intro=%s" % [main.current_map, main.clues.size(), str(main.intro_panel.visible)])
+			main.intro_panel.visible = false
 			step_idx += 1
 		"done":
 			print("RUNTIME_TEST_RESULT: %d 通过 / %d 失败" % [passed, failed])
